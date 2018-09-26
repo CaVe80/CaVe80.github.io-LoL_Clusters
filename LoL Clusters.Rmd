@@ -1,7 +1,8 @@
 ---
 title: "Unsupervised Machine Learning to Cluster League of Legends Champions"
-author: "Camilo Vega Ramírez"
+author: "Camilo Vega Ramirez"
 date: "26 September 2018"
+encoding: UTF-8
 output:
   html_document:
     df_print: paged
@@ -39,7 +40,7 @@ max-width: 3600px;
 
 [League of Legends](http://www.leagueoflegends.com) (LoL) is one of the most popular free to play MOBA (Multiplayer Online Battle Arena) games, it was published by [Riot Games](https://www.riotgames.com/en) in 2009, and had in 2016 (according to [www.statista.com](https://www.statista.com/statistics/317099/number-lol-registered-users-worldwide/)) about 10 million active players, it is usually in the top ranks of viewers in platforms like [Twitch.tv](https://www.twitch.tv/directory/game/League%20of%20Legends) and [gaming.youtube.com](https://gaming.youtube.com/game/UCsZ9w8wgYJc4eea6oI-3HLQ).
 
-The game is composed by two teams, of five players each, who battle each other to destroy the opposing team´s base. Every player controls a champion which is selected from a pool of 141 champions. These champions have unique abilities, stats, and playstyles which group them in classes and subclasses.
+The game is composed by two teams, of five players each, who battle each other to destroy the opposing team's base. Every player controls a champion which is selected from a pool of 141 champions. These champions have unique abilities, stats, and playstyles which group them in classes and subclasses.
 
 In 2016 through [this blog](https://na.leagueoflegends.com/en/news/game-updates/gameplay/dev-blog-classes-subclasses) Riot proposed six classes to group the champions:
 
@@ -147,7 +148,7 @@ Every base stat has an initial value at level 1 and an increase (except for Move
 
 The reason for this is that at this max level, you can  spot better  the differences between champions for each stat, for example ![alt text](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Heimerdinger.png "Heimerdinger"){ width=25 } and ![alt text](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Jhin.png "Jhin"){ width=25 } have Attack Damage of 55.536 and 57 respectively at Lv. 1 (pretty close), but at Lv. 18 this value change to 101.436 and 136.9 respectively, a bigger difference.
 
-We'll drop all the stat related to mana ("mp", "mpperlevel", "mpregen", "mpregenperlevel") since not all champions use mana as a resource to cast abilities, and the other resources are not in a comparable scale to mana. Also, we´ll drop the stats related to critical damage ("crit" and "critperlevel"), because its values are 0 for all the champions.
+We'll drop all the stat related to mana ("mp", "mpperlevel", "mpregen", "mpregenperlevel") since not all champions use mana as a resource to cast abilities, and the other resources are not in a comparable scale to mana. Also, we'll drop the stats related to critical damage ("crit" and "critperlevel"), because its values are 0 for all the champions.
 
 With the changes mentioned above, these will be our stats to analyze:
 
@@ -790,7 +791,7 @@ cluChamps <- lapply(clusterScore$cluster,
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[1]])
 ```
@@ -832,7 +833,7 @@ So we end with a considerable number of champions that on average have high dama
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[2]])
 ```
@@ -869,7 +870,7 @@ Also, we can see that the Cluster 2 summary tell us that the champions in it, on
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[3]])
 ```
@@ -906,7 +907,7 @@ If you are familiar with the game, you should be asking why is ![Evelynn](http:/
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[4]])
 ```
@@ -944,7 +945,7 @@ At first glance, the low average base lv18 Attack Damage seems like a contradict
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[5]])
 ```
@@ -982,7 +983,7 @@ Although they have on average, a high base armor at level 18 we do not consider 
 
 <div class = "row">
 <div class = "col-md-6">
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 ```{r results="asis", echo= F}
 cat(cluChamps[[6]])
 ```
@@ -1018,7 +1019,7 @@ As for the other fighter subclass Juggernaut, it seems more similar to Cluster 6
 
 ### 3.3.7. Cluster 7 Summary.
 
-<center>**Cluster´s Champions**</center>
+<center>**Cluster's Champions**</center>
 <center>[<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Jhin.png" width="50">](http://leagueoflegends.wikia.com/wiki/Jhin "Jhin") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Kaisa.png" width="50">](http://leagueoflegends.wikia.com/wiki/Kaisa "Kaisa") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Kayle.png" width="50">](http://leagueoflegends.wikia.com/wiki/Kayle "Kayle") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Nidalee.png" width="50">](http://leagueoflegends.wikia.com/wiki/Nidalee "Nidalee")  [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Orianna.png" width="50">](http://leagueoflegends.wikia.com/wiki/Orianna "Orianna") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Teemo.png" width="50">](http://leagueoflegends.wikia.com/wiki/Teemo "Teemo") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Thresh.png" width="50">](http://leagueoflegends.wikia.com/wiki/Thresh "Thresh")</center>
 
 <br><br>
