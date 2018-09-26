@@ -1,0 +1,1063 @@
+---
+title: "Unsupervised Machine Learning to Cluster League of Legends Champions"
+author: "Camilo Vega Ramírez"
+date: "26 September 2018"
+output:
+  html_document:
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 4
+    theme: cerulean
+    includes:
+      in_header: "favicon.txt"
+---
+<style>
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 13.5px;
+    border-left: 5px solid #eee;
+}
+
+body {
+text-align: justify;
+}
+
+body .main-container {
+max-width: 3600px;
+}
+
+.html-widget {
+    margin: auto;
+}
+</style>
+
+-----------------------------------------
+# 0. Introduction.
+
+[League of Legends](http://www.leagueoflegends.com) (LoL) is one of the most popular free to play MOBA (Multiplayer Online Battle Arena) games, it was published by [Riot Games](https://www.riotgames.com/en) in 2009, and had in 2016 (according to [www.statista.com](https://www.statista.com/statistics/317099/number-lol-registered-users-worldwide/)) about 10 million active players, it is usually in the top ranks of viewers in platforms like [Twitch.tv](https://www.twitch.tv/directory/game/League%20of%20Legends) and [gaming.youtube.com](https://gaming.youtube.com/game/UCsZ9w8wgYJc4eea6oI-3HLQ).
+
+The game is composed by two teams, of five players each, who battle each other to destroy the opposing team´s base. Every player controls a champion which is selected from a pool of 141 champions. These champions have unique abilities, stats, and playstyles which group them in classes and subclasses.
+
+In 2016 through [this blog](https://na.leagueoflegends.com/en/news/game-updates/gameplay/dev-blog-classes-subclasses) Riot proposed six classes to group the champions:
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/5/5a/Tank_icon.png){ width=50 } __Tanks__
+
+>*Tanks excel in shrugging off incoming damage and focus on disrupting their enemies more than being significant damage threats themselves.*
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/8/8f/Fighter_icon.png){ width=50 } __Fighters__
+
+>*Fighters are durable and damage-focused melee champions that look to be in the thick of combat.*
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/2/28/Slayer_icon.png){ width=50 } __Slayers__
+
+>*Slayers are fragile but agile damage-focused melee champions that look to swiftly take down their targets.*
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/2/28/Mage_icon.png){ width=50 } __Mages__
+
+>*Mages are offensive casters that seek to cripple and burn down the opposition through their potent spells.*
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/5/58/Controller_icon.png){ width=50 } __Controllers__
+
+>*Controllers are defensive casters that oversee the battlefield by protecting and opening up opportunities for their allies.*
+
+![](https://vignette.wikia.nocookie.net/leagueoflegends/images/7/7f/Marksman_icon.png){ width=50 } __Marksmen__
+
+>*Marksmen excel at dealing reliable sustained damage at range (usually through basic attacks) while constantly skirting the edge of danger. Although Marksmen have the ability to stay relatively safe by kiting their foes, they are very fragile and are extremely reliant on powerful item purchases to become true damage threats.*
+
+In the same blog Riot also describe subclasses, for those principal classes.
+
+On 2017 Riot published [this other blog](https://na.leagueoflegends.com/en/news/game-updates/gameplay/taking-another-look-subclasses) in which they introduce the ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/6/67/Specialist_icon.png){ width=25 } "Unique Playstyles" class to group those champions that don't fit well in any of the six default classes and makes other clarifications to the class system. For the most recent champion classification and description by class and subclass please visit [this league of legends Wikia page](http://leagueoflegends.wikia.com/wiki/Champion_classes).
+
+Through this study, we will attempt to validate all these champions classes by using unsupervised machine learning. For this we'll first create three cluster models based on different methodologies, then we'll create an ensemble model to find a consensus of these three methods and finally, we'll look to the characteristics of the clusters to find if they are similar to the proposed classes on the blogs.
+
+
+
+## 0.1 Notes Before Starting.
+
+- In this study, we will cluster the champions only by their base stats and game client ratings, we will not consider item builds, or post-game stats, this is because we want to make the analysis of the champs at raw state without the builds nor the influence of the players. If you are also interested in another approach for clustering LoL champions, you can read [this project](https://github.com/vonum/lol-category) made by Milan Keca. 
+
+- We tried to add to this study a [Natural Language Processing](https://en.wikipedia.org/wiki/Natural_language_processing) (NPL) of the champion's abilities text, as part of the data, unfortunately, the champion's abilities are so diverse in their effects (an in their texts) that our knowledge in NPL was not enough to extract useful insights of the texts.
+
+- We will use the champion's names as they appear in the [Riot's Data Dragon web service](https://developer.riotgames.com/static-data.html), that means without punctuation, special characters or spaces (e.g. Aurelion Sol as AurelionSol, Cho'Gath as Chogath), and the champion Wu Kong will be coded as MonkeyKing.
+
+- All data collected is from patch 8.19
+
+- [R language](https://www.r-project.org/) will be used for the analysis, all the code will be hidden, but you can see it all by clicking the "code" button in the upper right corner of this document and selecting "Show All Code", you can also see individual chunks of code by clicking the several "code" buttons that will appear to the right of each of the outputs.
+
+- We'll try for all the plots to be interactive, so you can pass the mouse over a point and get information of it and also be able to zoom in and out, and for 3D plots to click and drag to explore them.
+
+
+## 0.2 Loading Requiered Packages.
+
+This document uses the following R packages for the analysis: dplyr, httr, ggplot2, gridExtra, ggbiplot, Rtsne, rbokeh, cluster, mclust, diceR, and plotly
+
+```{r message=FALSE}
+require(dplyr)
+require(httr)
+require(ggplot2)
+require(gridExtra)
+require(ggbiplot)
+require(Rtsne)
+require(rbokeh)
+require(cluster)
+require(mclust)
+require(diceR)
+require(plotly)
+```
+
+# 1. Data Collection.
+
+For collecting the champions base stats we'll use the Riot's Data Dragon web service that is publicly available, the data for the champions game client ratings will be gathered from [leagueoflegends.wikia.com](http://leagueoflegends.wikia.com/wiki/List_of_champions/Ratings) and transcribed into a text file available for [download from Google Docs](https://docs.google.com/uc?id=15r1CT-vFtb2FJjU_2xg-xRbNI1Wsa2WW&export=download).
+
+## 1.1. Collecting Champions Base Stats.
+All the in-game data about the champions is stored in [this json document](http://ddragon.leagueoflegends.com/cdn/8.18.1/data/en_US/championFull.json), from the Data Dragon web service, from this json, we will only extract the name of each champion and their base stats.
+
+```{r rows.print=9}
+
+patch <- "8.19.1"
+
+#For most recent patch info use this code instead
+#patch <-  GET("https://ddragon.leagueoflegends.com/api/versions.json") %>% 
+#  content(encoding = "UTF-8") %>% `[[`(1)
+
+#Getting the json document
+jsonData <-  paste0("http://ddragon.leagueoflegends.com/cdn/",patch,"/data/en_US/championFull.json") %>% 
+  GET() %>%
+  content(encoding = "UTF-8")
+
+#Creating the dataframe with the champion name and base stats
+baseStats <- data.frame()
+for (i in names(jsonData$data)) {
+  stats <- data.frame(jsonData$data[[i]]$stats)
+  stats$Champion <- i
+  baseStats <- rbind(baseStats,stats) 
+}
+
+baseStats %>% 
+  select(Champion, everything())
+```
+
+
+### 1.1.1.	Transforming to Level 18 Base Stats and Dropping Stats.
+
+Every base stat has an initial value at level 1 and an increase (except for Move speed, and Attack Range) when the champion gains a level, for this analysis we will take only in account the base stats at lv18 (the maximum level possible in a normal game).
+
+The reason for this is that at this max level, you can  spot better  the differences between champions for each stat, for example ![alt text](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Heimerdinger.png "Heimerdinger"){ width=25 } and ![alt text](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Jhin.png "Jhin"){ width=25 } have Attack Damage of 55.536 and 57 respectively at Lv. 1 (pretty close), but at Lv. 18 this value change to 101.436 and 136.9 respectively, a bigger difference.
+
+We'll drop all the stat related to mana ("mp", "mpperlevel", "mpregen", "mpregenperlevel") since not all champions use mana as a resource to cast abilities, and the other resources are not in a comparable scale to mana. Also, we´ll drop the stats related to critical damage ("crit" and "critperlevel"), because its values are 0 for all the champions.
+
+With the changes mentioned above, these will be our stats to analyze:
+
+|       STAT       	|                                DESCRIPTION                                	|
+|-----------------	|---------------------------------------------------------------------------	|
+| lv18Health      	| Amount of life a champion has at level 18                                	|
+| lv18HealthRegen  	| Amount of health a champion regenerates every five seconds at level 18     	|
+| Range            	| Maximum reach of a champion's basic attacks                               	|
+| lv18AttackDamage 	| Amount of physical damage dealt by basic attacks at level 18              	|
+| lv18AttackSpeed  	| Amount of basic attacks per second at level 18                        	|
+| lv18Armor        	| Percentage of [effective health](http://leagueoflegends.wikia.com/wiki/Health#Effective_health) gained against physical damage at level 18 	|
+| lv18MagicResist  	| Percentage of effective health gained against magical damage at level 18  	|
+| MoveSpeed        	| Maximum units distance a champion can travel per second                   	|
+
+```{r rows.print=9}
+#Creating the dataframe for lv18 stats
+(lv18Stats <- data.frame(Champion = baseStats$Champion,
+                        lv18Health = baseStats$hpperlevel*17 + baseStats$hp,
+                        lv18HealthRegen = baseStats$hpregenperlevel*17 + baseStats$hpregen,
+                        Range = baseStats$attackrange,
+                        lv18AttackDamage = baseStats$attackdamageperlevel*17 + baseStats$attackdamage,
+                        lv18AttackSpeed = baseStats$attackspeedperlevel*17 + 0.625/(1 + baseStats$attackspeedoffset),
+                        lv18Armor = baseStats$armorperlevel*17 + baseStats$armor,
+                        lv18MagicResist = baseStats$spellblockperlevel*17 + baseStats$spellblock,
+                        MoveSpeed = baseStats$movespeed))
+
+```
+
+### 1.1.2. Visualization of the Base Stats at Level 18.
+To find patterns in the stats let's see the base stats at level 18 density plots.
+
+```{r  fig.height = 5, fig.width = 10, fig.align='center'}
+#plots for each vaiable, except Champion
+statsHist <- lapply(names(lv18Stats[,-1]),
+              function(col) qplot(lv18Stats[[col]],
+                                  geom = "density", xlab = col))
+
+do.call(grid.arrange,statsHist)
+```
+
+
+From the plots, we can see that there are two distinct groups for the Range and lv18MagicResist stats, what tell us that those variables will have an important role in the determination of the clusters.
+
+Likewise, we see outliers for the variables lv18HealthRegen, lv18AttackSpeed and lv18Armor, also the basic stat MoveSpeed shows signals of being multimodal.
+
+## 1.2.	Collecting Champions Game Client Ratings.
+In the LoL client, you can find an overview of each champion that shows its performance in the different key aspects of the game and also their style of play, type of damage, and difficulty. We collected this information from [leagueoflegends.wikia.com](http://leagueoflegends.wikia.com/wiki/List_of_champions/Ratings) and transcribe it into a text file available on [this link](https://docs.google.com/uc?id=15r1CT-vFtb2FJjU_2xg-xRbNI1Wsa2WW&export=download).
+
+```{r rows.print=9}
+#Creating the dataframe for ratings
+(ratings <- read.delim("https://docs.google.com/uc?id=15r1CT-vFtb2FJjU_2xg-xRbNI1Wsa2WW&export=download"))
+
+```
+
+### 1.2.1. Transforming and Dropping Game Client Ratings.
+
+The Difficulty rating of the champions is not a variable that affects the behavior or playstyle of the champion in the game, so we'll drop it.
+
+The variables Damage, Toughness, Control, Mobility, and Utility, are scores from 0 to 3 regarding how each champion performs in those areas of the game. We'll assume that the distance between each score is the same (i.e. the distance from scores 0 to 1 is the same that from 2 to 3), so we will leave these variables as they are.
+
+The variable Style. is a score of the champion's damage that comes from abilities, a value of 100 means that the damage of that champions comes principally from the abilities, in contrast, a value of 0 means that the damage of that champions comes principally from basic attacks, a value of 50 means that the damage of that champions are distributed 50% - 50% between abilities and basic attacks, since this variable behaves similarly to a percentage we will leave it as it is.
+
+Finally, the variable Type tells us the primary damage type of deal by a champion, this variable is categorical with three levels (Magic, Mixed and Physical), but since we need it to be numerical (to have a distance between each value, so it can be used in the cluster analysis) we'll transform it in such a way it behaves similarly to the variable Style. We'll assign a value of 1 if the Type is Magic, a value of 0 if the Type is Physical and a value of 0.5 if the Type is Mixed.
+
+With the assumptions and changes mentioned above, these will be our game client ratings to analyze:
+
+|       RATING     	|                                DESCRIPTION                                	|
+|-----------------	|---------------------------------------------------------------------------	|
+| Damage          	| Score from 0 to 3 of the champion ability to deal damage                   	|
+| Toughness       	| Score from 0 to 3 of the champion ability to absorb damage                 	|
+| Control          	| Score from 0 to 3 of the champion ability to disable enemies              	|
+| Mobility         	| Score from 0 to 3 of the champion ability to move quickly, blink or dash  	|
+| Utility         	| Score from 0 to 3 of the champion ability grant beneficial effects on allies or provide vision|
+| Style.          	| Score from 0 to 1 of the champion's damage that comes from abilities in contrast to the damage that comes from basic attacks|
+| Type          	| Score from 0 to 100 of the champion's damage that comes from magic damage in contrast to the damage that comes from physical damage|
+
+```{r rows.print=9}
+#Recoding Type variable
+ratings$Type <- ifelse(ratings$Type == "Physical", 0, 
+                       ifelse(ratings$Type == "Magic", 1,0.5))
+#Droping dificulty
+(ratings <- ratings[-9])
+
+```
+
+### 1.2.2. Visualization of the Game Client Ratings.
+Since the game client ratings behave like ordinal data we'll look at their bar plots, instead of density plots, to find patterns.
+
+```{r fig.height = 5, fig.width = 10, fig.align='center'}
+#plots for each vaiable, except Champion
+ratingsBar <- lapply(names(ratings[,-1]),
+                   function(col) qplot(ratings[[col]],
+                                       geom = "bar", xlab = col))
+
+do.call(grid.arrange,ratingsBar)
+```
+
+For the variables Damage, Control, Mobility, and Style most of the champions are concentrated in one score, for the variables Utility and Type most of the champions are concentrated between two scores, and for the variable Toughness, the champions are almost evenly distributed between the scores.
+
+## 1.3. Joining the Level 18 Base Stats and the Game Client Ratings.
+After joining our previously collected data this is our champions data set:
+
+```{r rows.print=9}
+#Joining lv18Stats and Ratings
+(completeData <- inner_join(lv18Stats, ratings, by = "Champion"))
+```
+
+# 2. Clustering Champions.
+
+For clustering the champions we'll use the following methods: partition (using Partitioning Around Medoids algorithm), hierarchical and Model-based (using a Gaussian Mixture Model), then we'll  ensembling them to find the consensus clusters for the champions.
+
+For each of the above methods, we'll try to find seven clusters, one for each of the six champion classes and one for the Unique Playstyle, as described in the introduction of this document.
+
+Before all this, we'll apply a dimension reduction to the data (via principal components analysis) to avoid correlations between the variables, and then we'll a apply a T-distributed Stochastic Neighbor Embedding (t-SNE) to the selected principal components, to visualize our data in two dimensions.
+
+## 2.1. Principal Components Analysis of the Data.
+
+[Principal component analysis](http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials/) (PCA), is a dimension reduction technique that transforms the variables in a data set (that are possibly correlated) into a dataset of principal components that are linearly uncorrelated variables.
+
+Each of those principal components explains a proportion of the variance of the original data set, so a reduction in dimensions is made by selecting only those that explain a significant cumulative proportion of the variance of the original data.
+
+PCA will help us avoid correlated variables in our champions data and thus be able to get more precise clusters.
+
+
+### 2.1.1. Visualising Correlated Variables.
+
+In our champions dataset, we can see variables that may be correlated, like lv18Armor with Toughness, or Mobility with MoveSpeed. The following is a [bi-plot](https://en.wikipedia.org/wiki/Biplot) of the data PCA that will help us visualize these correlations.
+
+```{r message=FALSE, warning=FALSE, , fig.align='center'}
+#PCA over completeData without Champion variable
+dataPCA  <-   prcomp(completeData[,-1], scale. = T)
+
+# biplot
+ggbiplot(dataPCA) +
+  coord_cartesian(xlim = c(-2,2.5)) +
+  labs(title = "Biplot of LoL champions data set")
+```
+
+From the plot we can see that variables like Range and Damage are mostly independent of the others, otherwise, variables like lv18AttackSpeed and Mobility are correlated. By eye, we can spot about 5 to 7 groups of similar variables in the data.
+
+
+### 2.1.2.  Choosing the Number of Principal Components.
+
+The summary of principal components of the data is as follows:
+
+```{r}
+as.data.frame(round(summary(dataPCA)[[6]],2))
+```
+
+we will keep the first seven principal components that explain a cumulative variance of at least 80% of the original data. 
+
+This is the principal components data set that will be used to cluster the champions:
+
+```{r rows.print=9}
+#Selecting the fist 7 PC
+pcaMatrix <- dataPCA$x[,1:7]
+
+#Adding champion names as index
+row.names(pcaMatrix) <- baseStats$Champion
+
+as.data.frame(round(pcaMatrix,2))
+```
+
+### 2.1.3. Visualizing the Principal Components.
+
+Let's look at the principal components density plots to find patterns in the data.
+
+```{r fig.height = 5, fig.width = 10, fig.align='center'}
+#Plots for each PC
+pcaHist <- lapply(colnames(pcaMatrix),
+                     function(col) qplot(pcaMatrix[,col],
+                                         geom = "density", xlab = col))
+
+do.call(grid.arrange,pcaHist)
+```
+
+
+The PC1 is strongly bi-modal, that tells us that probably there are two groups of separated champions. For the other main components, we can see that they are multimodal but not with a visual clarity that allows us to distinguish patterns.
+
+## 2.2. t-SNE Representation of the Data.
+
+Our principal components data set is multidimensional (seven dimensions),  so to make a visual representation of the clusters, that allows us to understand them, we'll use a [t-distributed stochastic neighbor embedding](https://lvdmaaten.github.io/tsne/) (t-SNE) representation of the data set.
+
+The t-SNE will allow us to see a plot of two or three dimensions that put the champions with similar characteristics near to each other, then for each clustering method we will group the data on the T-SNE plot according to the outcome of the clusters, so we can compare the results of the respective methods.
+
+This is our two dimensions T-SNE representation of the principal components data set, before grouping it by any cluster.
+
+```{r warning=FALSE}
+#For reproducibility
+set.seed(201280)
+
+#Applying the t-sne algorithm to the data
+tsne2D <- Rtsne(pcaMatrix, theta = 0, dims = 2)
+
+#Transforming to a dataframe
+tsneDF2D <- as.data.frame(tsne2D$Y)
+tsneDF2D$Champion <- baseStats$Champion
+
+#Plotting
+figure(tsneDF2D, title = "LoL Champions t-SNE Representation",legend_location = NULL, xlab = "Dimension 1", ylab = "Dimension 2") %>% 
+    ly_points(x = V1, y = V2, hover = "@Champion")
+```
+
+For the raw t-SNE representation you can notice (especially if you're familiar with the champions) that the champions are separated in the bottom with those that use ranged basic attacks, and on the top with those with melee basic attacks.
+
+Also, for the champions in the bottom, those at the right mostly use magic and abilities as their primary source of damage, and the ones on the left mostly use basic attacks and physical damage.
+
+For the champions, at the top, those on the left mostly have high damage, and those on the right mostly have high resistances and life.
+
+In conclusion, this t-SNE representation looks like a fairly good representation of the champions proximity.
+
+##2.3. Partitioning Around Medoids Clusters.
+
+[Partitioning Around Medoids](http://www.sthda.com/english/articles/27-partitioning-clustering-essentials/88-k-medoids-essentials/#pam-algorithm) (PAM) is a partition cluster algorithm, that tries to find the k- medoid of the data, each medoid is a point inside a cluster which mean distance between it and the other observations of the cluster is minimized.
+
+These are the clusters got from applying the PAM algorithm on our champions principal components data:
+
+```{r rows.print=9}
+#Applying PAM to the PC data
+lolPam <- pam(pcaMatrix,7)
+
+#Extracting clusters content as text
+pamClusters <- data.frame(Champion = baseStats$Champion, Cluster = lolPam$clustering) %>% 
+  arrange(Cluster, Champion) %>% 
+  group_by(Cluster) %>% 
+  summarise(champs = paste(Champion,collapse = ", ")) %>% 
+  select(champs) %>% 
+  as.matrix() %>% 
+  as.character()
+
+#Creating PAM clusters table
+htmlTable::htmlTable(t(pamClusters), cgroup = paste0("Cluster", as.character(1:7)), n.cgroup = rep(1,7),
+          caption = "LoL Champions by PAM Clusters", align = '|c|c|c|c|c|c|c|' )
+```
+
+### 2.3.1. Visualizing PAM Clusters.
+
+Next, we'll take the t-SNE representation from point 2.2. and we'll group the champions by the clusters got with the PAM algorithm.
+
+```{r warning=FALSE}
+#Binding the t-SNE data and the PAM clusters
+lolpamDF <- cbind(tsneDF2D , cluster = factor(lolPam$clustering))
+
+#Plotting the t-SNE by PAM clusters
+figure(lolpamDF, title = "t-SNE by PAM Clusters", legend_location = NULL, xlab = "Dimension 1", ylab = "Dimension 2") %>% 
+    ly_points(x = V1, y = V2, color = cluster, 
+              hover = c(cluster,Champion))
+```
+
+We can see that clusters 3, 4, 5 and 6 are somehow well centered according to the T-SNE, and from those, cluster 3 had a similarity to the Tank class, cluster 4 had similarity with the Controller class, and cluster 6 had similarity with the Marksmen class.  Limits between clusters are not clear, especially for clusters 1, 2 and 7.
+
+## 2.4. Hierarchical Clusters.
+
+[Hierarchical clustering](http://www.sthda.com/english/articles/28-hierarchical-clustering-essentials/) methods have two approaches. The Agglomerative (AGNES) algorithm, in which each observation starts as a cluster then the two nearest clusters are joined to form a single cluster, then this process is repeated until the observations form a big single cluster. The Divisive (DIANA) algorithm, is the inverse of the agglomerative, in which all the observations start as a single cluster and it is consecutively subdivided until each observation conform a single cluster.
+
+The result of a Hierarchical can be seen through a dendrogram which is a tree plot in which you can see the points where the clusters join (or divide). To form the clusters for this method, you must cut the tree in a given height and group the observations.
+
+This is the dendrogram from applying the agglomerative Hierarchical clustering algorithm to our champions main components data, cutting the tree to get seven clusters:
+
+```{r fig.height = 5, fig.width = 12, fig.align='center'}
+#creating the distances matrix
+loldist <- dist(pcaMatrix)
+
+#Agnes clusterign
+lolHc <- hclust(loldist,  "ward.D2")
+
+#Dendrogram
+plot(lolHc, cex = .6, hang = -1, main = "LOL Champions Dendrogram", xlab="", sub="")
+rect.hclust(lolHc, k = 7, border = 1:7)
+```
+
+These are the clusters got by the cut:
+
+```{r}
+#Extracting clusters content as text
+hcClusters <- data.frame(Champion = baseStats$Champion, Cluster = cutree(lolHc, k = 7)) %>% 
+  arrange(Cluster, Champion) %>% 
+  group_by(Cluster) %>% 
+  summarise(champs = paste(Champion,collapse = ", ")) %>% 
+  select(champs) %>% 
+  as.matrix() %>% 
+  as.character()
+
+#Creating Hierarchical clusters table
+htmlTable::htmlTable(t(hcClusters), cgroup = paste0("Cluster", as.character(1:7)), n.cgroup = rep(1,7),
+          caption = "LoL Champions by Hierarchical Clusters", align = '|c|c|c|c|c|c|c|' )
+```
+
+### 2.4.1. Visualizing Hierarchical Clusters.
+
+Next, we'll take the t-SNE representation from point 2.2. and we'll group the champions by the clusters got with the Hierarchical method.
+
+```{r warning=FALSE}
+#Binding the t-SNE data and the Hierarchical clusters
+lolHcDf <- cbind(tsneDF2D , cluster = factor(cutree(lolHc, k = 7)))
+
+#Plotting the t-SNE by Hierarchical clusters
+figure(lolHcDf, title = "t-SNE by Hierarchical Clusters", legend_location = NULL, xlab = "Dimension 1", ylab = "Dimension 2") %>% 
+    ly_points(x = V1, y = V2, color = cluster, 
+              hover = c(cluster,Champion))
+```
+
+We can see that clusters 1, 2, 5 and 7 are somehow well centered according to the T-SNE, and from those, cluster 2 had a similarity to the Mage class, cluster 5 had similarity with the Slayer class, and cluster 7 had similarity with the Controller class. Limits between clusters on the top side of the plot are not clear.
+
+## 2.5. Gaussian Mixture Model Clusters.
+
+[Model-based clustering](http://www.sthda.com/english/articles/30-advanced-clustering/104-model-based-clustering-essentials/) see the data as a [multivariate distribution](https://en.wikipedia.org/wiki/Multivariate_normal_distribution) that is a combination of k numbers (one for each desired cluster) of sub multivariate distributions then It try to find this sub-distribution and next calculates the probability for each observation to belong to each of the distributions, then it assigns each observation to the cluster (distribution) which is more probably to belong.
+
+The algorithms used by the Model-based method are [Mixture models](https://en.wikipedia.org/wiki/Mixture_model) that are based on a type of distribution (Normal, Binomial, Poisson, etc.), so for the method to work, you should consider the type of multivariate distribution that your data will display.
+
+The density plots for our principal components data (as seen on point 2.1.3.) behave somehow like normal or multimodal normal distributions, so we'll use a Gaussian mixture model (GMM) for our Model-based clustering.
+
+These are the clusters got from applying the GMM algorithm on our champions principal components data:
+
+```{r message=FALSE, warning=FALSE}
+#Applying GMM to the PC data
+lolMc <- Mclust(pcaMatrix, 7)
+
+#Extracting clusters content as text
+mcClusters <- data.frame(Champion = baseStats$Champion, Cluster = lolMc$classification) %>% 
+  arrange(Cluster, Champion) %>% 
+  group_by(Cluster) %>% 
+  summarise(champs = paste(Champion,collapse = ", ")) %>% 
+  select(champs) %>% 
+  as.matrix() %>% 
+  as.character()
+
+#Creating GMM clusters table
+htmlTable::htmlTable(t(mcClusters), cgroup = paste0("Cluster", as.character(1:7)), n.cgroup = rep(1,7),
+          caption = "LoL Champions by GMM Clusters", align = '|c|c|c|c|c|c|c|' )
+```
+
+##2.5.1. Visualizing GMM Clusters.
+
+Next, we'll take the t-SNE representation from point 2.2. and we'll group the champions by the clusters got with the GMM algorithm.
+
+```{r warning=FALSE}
+#Binding the t-SNE data and the GMM clusters
+lolMcDf <- cbind(tsneDF2D , cluster = factor(lolMc$classification))
+
+#Plotting the t-SNE by GMM clusters
+figure(lolMcDf, title = "t-SNE by GMM Clusters", legend_location = NULL, xlab = "Dimension 1", ylab = "Dimension 2") %>% 
+    ly_points(x = V1, y = V2, color = cluster, 
+              hover = c(cluster,Champion))
+```
+
+We can see that clusters 2, 4, 5 and 7 are somehow well centered according to the T-SNE, and from those, cluster 2 had a similarity to the Mage class, cluster 4 had similarity with the Controller class, and cluster 5 had similarity with the Marksmen class. 
+
+At first glance cluster, 1 looks like a total mess, with observations everywhere on the plot. But what happens is that in this cluster ends up all those champions with not enough probabilities of belonging to any of the other clusters, in fact, most of these champions are in the peripheral of the other clusters. Which makes this cluster similar to the Unique Playstyles class.
+
+## 2.6. Ensemble Model Clusters.
+
+[Ensemble](https://en.wikipedia.org/wiki/Ensemble_learning) models takes the concept of Two (or more) heads are better than one, and apply it to learning machine, the idea is to combine the results of different models and produce an outcome that improves the accuracy that each of the models could get separately.
+
+So far, our clustering methods didn't show decent results on melee champions (top side of the t-SNE), the Hierarchical method makes a decent job clustering the range champions (bottom side of the t-SNE), and the GGM could find a cluster of champions that don't fit well in other clusters.  So, we'll create an Ensemble model that combines our previous clustering methods,  hoping to get better results.
+
+We used the R function dice, from the [diceR package](https://alinetalhouk.github.io/diceR/), to create an ensemble model from the PAM, Hierarchical and GMM models. These are the clusters created by it:
+
+```{r echo = T, results = 'hide'}
+#Creating ensemble model from PAM,Heiheralchical and GMM
+lolDice <- dice(pcaMatrix,
+                nk = 7,
+                algorithms = c("hc","pam","gmm"), 
+                hc.method = "ward.D2",
+                trim = T,
+                reweigh = T,
+                n = 2,
+                cons.funs = "CSPA",
+                nmf.method = "lee", 
+                prep.data = "none", 
+                reps = 20)
+```
+```{r message=FALSE, warning=FALSE}
+#Extracting clusters content as text
+diceClusters <- data.frame(Champion = baseStats$Champion, CSPA = lolDice$clusters) %>% 
+  arrange(CSPA, Champion) %>% 
+  group_by(CSPA) %>% 
+  summarise(champs = paste(Champion,collapse = ", ")) %>% 
+  select(champs) %>% 
+  as.matrix() %>% 
+  as.character()
+
+#Creating Ensemble model clusters table
+htmlTable::htmlTable(t(diceClusters), cgroup = paste0("Cluster", as.character(1:7)), n.cgroup = rep(1,7),
+          caption = "LoL Champions by Ensemble Clusters", align = '|c|c|c|c|c|c|c|' )
+```
+
+### 2.6.1. Visualizing Ensemble Model Clusters.
+
+Next, we'll take the t-SNE representation from point 2.2. and we'll group the champions by the clusters got with the Ensemble model.
+
+```{r warning=FALSE}
+#Binding the t-SNE data and the Ensemble clusters
+lolDiceDf <- cbind(tsneDF2D , cluster = factor(lolDice$clusters))
+
+#Plotting the t-SNE by Ensemble clusters
+figure(lolDiceDf, title = "t-SNE by Ensemble Clusters", legend_location = NULL) %>% 
+    ly_points(x = V1, y = V2, color = cluster, 
+              hover = c(cluster,Champion))
+```
+
+We can see that the Ensemble model makes a huge improvement in clustering the top side of the t-SNE.
+
+Although not all the clusters are centered, we can now see clear limits between them, except for cluster 7 that have all those champions with not enough probabilities of belonging to any of the other clusters. 
+
+### 2.6.2.  3D t-SNE Representation by Ensemble Model Clusters.
+
+To have a better view  of the clusters created by our ensemble method and see if we can spot similarities with the classes proposed by Riot, we'll make a 3D t-SNE of our principal components data group by  the ensemble method clusters. 
+
+```{r out.width = '100%', fig.height = 6.5}
+#For reproducibility
+set.seed(83943)
+
+#Applying the t-sne algorithm to the data
+tsne3D <- Rtsne(pcaMatrix, theta = 0, dims = 3)
+
+#Transforming to a dataframe
+tns3DDF <- as.data.frame(tsne3D$Y) %>% 
+  mutate(Champion = baseStats$Champion, cluster = factor(lolDice$clusters))
+
+#Plotting
+plot_ly(tns3DDF, mode = 'markers', type = 'scatter3d', 
+        text = ~ paste0(Champion,'</br></br>',"Cluster ",as.character(cluster))) %>%
+  add_trace(
+    name = ~paste0("Cluster ",cluster),
+    x = ~V1, 
+    y = ~V2,
+    z = ~V3,
+    hoverinfo = "text",
+    color = ~ factor(cluster)) %>% 
+  layout(titlefont  = list(family = "Times New Roman", size = 12),
+    title = "League of Legends Champion Clusters (Patch 8.19) \n t-SNE representation by Ensemble model",
+    scene = list(
+      xaxis = list(title = "Dim 1"),
+      yaxis = list(title = "Dim 2"),
+      zaxis = list(title = "Dim 3"))) %>% 
+  add_annotations(
+    font  = list(family = "Times New Roman", size = 10),
+    x= 0,
+    y= 0,
+    align = "left",
+    text = "Consensus function: Cluster-based Similarity Partitioning Algorithm (CSPA)\nClustering algorithms: Partitioning Around Medoids, Hierarchical, Gaussian Mixture Model",
+    showarrow = F
+  )
+```
+
+If you are familiar with the game, you can already spot similarities between the champions on each cluster and the classes proposed by Riot. These are the similarities that we find a before further analysis: 
+
+| CLUSTER 	| SIMILARITY WITH CLASS 	| DEGREE OF SIMILARITY 	|
+|:-------:	|:---------------------:	|:--------------------:	|
+| 1       	| Slayers               	| Medium               	|
+| 2       	| Mages                 	| High                 	|
+| 3       	| Tanks                 	| High                 	|
+| 4       	| Marksmen              	| High                 	|
+| 5       	| Controllers           	| High                	|
+| 6       	| Fighters              	| Medium               	|
+| 7       	| Unique Playstyles     	| Similar Approach     	|
+
+### 2.6.3. Ensemble Model Cluster's Silhouette Scores.
+
+The Ensemble model clusters look good, but it is not perfect. If you're familiar with the game, you will have noticed champions in odd places, like ![Evelynn](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Evelynn.png "Evelynn"){ width=25 } being grouped with the tank champions.
+
+The [silhouette value](https://en.wikipedia.org/wiki/Silhouette_(clustering)) is a score of how well an observation was assigned to a cluster, if it is value is near 1 its means that the observation is probably well assigned, if it is near -1 its means that the observation is probably wrong assigned, if its value is near 0 its mean that the observation is near to the assigned cluster, but also  observation is near to a neighbor cluster.
+
+This is the Silhouette score for the Champions based on their assigned Ensemble model cluster:
+
+```{r rows.print=9}
+#Finding the silhouette scores
+lolSilhouette <- silhouette(lolDice$clusters, loldist)
+
+#Adding champions names
+lolSilhouetteDF <- data.frame(champion = baseStats$Champion, lolSilhouette[1:141, 1:3]) 
+
+#Displaing by cluster and silhouette score
+lolSilhouetteDF %>%    
+   arrange(cluster, desc(sil_width))
+```
+
+You can notice that practically all the champions of cluster 7 have negative values, this is consistent with the idea that these champions have a Unique style, so they are not similar to other champions, but also they are not similar between them.
+
+# 3. Summarizing Cluster Results.
+
+Now that we have our cluster is time to get insights from them and compare the points that have or not in common with the champion classes proposed by Riot.
+But first, we'll make some transformations to our level 18 base stats and the game client ratings data to facilitate this analysis.
+
+## 3.1. Rescaling the Variables.
+
+First, we'll transform our level 18 base stats and the game client ratings variables to be in a common scale, we chose a score from 0 to 100, so it is easy to compare the performance of each cluster (and champion) in each one of those variables.
+
+This is our rescaled data:
+
+```{r rows.print=9}
+
+#Rescaling variables
+(dataNorm <- completeData %>% 
+  mutate_at(.vars = vars(lv18Health:Type), 
+            .funs = funs(rescale(.,c(0,100)))) %>% 
+  mutate_at(.vars = vars(lv18Health:Type),
+            .funs = funs(round(.))))
+```
+
+
+## 3.2. Clusters Average Scores.
+
+This is the average performance of the champions in each cluster per variable:
+
+```{r}
+#Grouping by cluster, then mean summarizing 
+(clusterScore <- dataNorm[,-1]  %>% 
+  mutate(cluster = lolDice$clusters) %>%
+  group_by(cluster) %>% 
+  summarise_all(funs(round(mean(.)))))
+```
+
+## 3.3. Analysis of the Clusters.
+
+For the analysis of each of the clusters formed with the Ensemble model, first we'll create an individual summary, showing the champions that compose them, a polar plot of the base stats and a polar plot of the ratings, and a table with, the Strengths and Weaknesses (by base stats and ratings), Style, and Damage Type.
+
+For the mentioned table, if the average score for the base stats or ratings is 60 or higher, we will consider it as a Strength, if the average score is 40 or lower, we will consider it as a Weaknesses. For the style, if the average score is 60 or higher, we will consider it as "Majority uses basic attacks", if the average score 40 or lower, we will consider it as "Majority uses abilities", any other value will be considered as "Mixed Styles". For the Damage Type, if the average score is 60 or higher, we will consider it "Majority physical damage", if the average score 40 or lower, we will consider it as "Majority magic damage", any other value will be considered as "Mixed damage".
+
+After this we will compare the cluster with the most similar proposed by Riot class, looking for likenesses and dissimilarities.
+
+For the creation of the polar plots, we use the following code. 
+
+```{r}
+#Creatign clusters polar plots for base stats
+polarStats <- lapply(clusterScore$cluster, 
+                     function(clu) plot_ly(type = 'scatterpolar', mode = "markers",
+                                           r = as.numeric(as.vector(clusterScore[clu,2:9])),  
+                                           theta = as.character(as.vector(names(clusterScore[2:9]))),
+                                           fill = 'toself') %>%
+                       layout( polar = list( radialaxis = list(visible = T, range = c(0,100))),
+                               showlegend = F)
+                    )
+
+#Creatign clusters polar plots for ratings
+polarRatings <- lapply(clusterScore$cluster, 
+                     function(clu) plot_ly(type = 'scatterpolar', mode = "markers",
+                                           r = as.numeric(as.vector(clusterScore[clu,10:14])),  
+                                           theta = as.character(as.vector(names(clusterScore[10:14]))),
+                                           fill = 'toself',
+                                           fillcolor = 'green',
+                                           opacity = 0.50) %>%
+                       layout( polar = list( radialaxis = list(visible = T, range = c(0,100))),
+                               showlegend = F)
+                    )
+```
+
+To reproduce the plot corresponding to each cluster, write "polarStats" or "polarRating" followed by the cluster number inside [[]] (e.g. "polarStats [[1]]"). 
+
+
+```{r echo= F}
+library(tidyr)
+
+#geting clusters stats strengs and weaknesess
+statsStrengWeak <- clusterScore[,1:9] %>% 
+  gather(baseStat, score, -cluster) %>% 
+  mutate(strengWeak = ifelse(score<=40, "weak", ifelse(score >= 60, "strong", "normal"))) %>% 
+  dplyr::arrange(cluster, strengWeak, baseStat)
+
+#stats strengs as text
+baseStrengs <- lapply(clusterScore$cluster, 
+                      function(clu) statsStrengWeak %>% 
+                          dplyr::filter(strengWeak == "strong", cluster == clu) %>% 
+                          pull(baseStat) %>% 
+                          paste(collapse = ",  ")
+                      )
+
+#stats weaknesess as text
+baseWeak <- lapply(clusterScore$cluster, 
+                      function(clu) statsStrengWeak %>% 
+                        dplyr::filter(strengWeak == "weak", cluster == clu) %>% 
+                        pull(baseStat) %>% 
+                        paste(collapse = ",  ")
+                      )
+
+#geting clusters ratings strengs and weaknesess
+RatesStrengWeak <- clusterScore[,c(1,10:14)] %>% 
+  gather(rate, score, -cluster) %>% 
+  mutate(strengWeak = ifelse(score<=40, "weak", ifelse(score >= 60, "strong", "normal"))) %>% 
+  dplyr::arrange(cluster, strengWeak, rate)
+
+#ratings strengs as text
+RateStrengs <- lapply(clusterScore$cluster, 
+                      function(clu) RatesStrengWeak %>% 
+                        dplyr::filter(strengWeak == "strong", cluster == clu) %>% 
+                        pull(rate) %>% 
+                        paste(collapse = ",  ")
+)
+
+#ratings weaknesess as text
+RateWeak <- lapply(clusterScore$cluster, 
+                   function(clu) RatesStrengWeak %>% 
+                     dplyr::filter(strengWeak == "weak", cluster == clu) %>% 
+                     pull(rate) %>% 
+                     paste(collapse = ",  ")
+)
+
+#clustes styles as text
+style <- lapply(clusterScore$cluster, 
+                   function(clu) clusterScore %>% 
+                     dplyr::mutate(Style. = ifelse(Style.<=40, "Majority uses basic attacks", 
+                                                   ifelse(Style. >= 60, "Majority uses abilities", "Mixed Styles"))) %>%
+                     dplyr::filter(cluster == clu) %>% 
+                     pull(Style.)
+                )
+
+#clustes damage type as text
+damagetype <- lapply(clusterScore$cluster, 
+              function(clu) clusterScore %>% 
+                dplyr::mutate(Type = ifelse(Type <= 40, "Majority physical damage", 
+                                              ifelse(Type >= 60, "Majority magic damage", "Mixed damage"))) %>%
+                dplyr::filter(cluster == clu) %>% 
+                pull(Type)
+)
+
+#creating clusters summaries df
+clusterSummaryDf <- lapply(clusterScore$cluster,
+                        function(clu) data.frame(row.names = c("Base Stats Strengths", "Base Stats Weaknesses", "Ratings Strengths", "Ratings Weaknesses", "Style", "Damage Type"), variables = c(baseStrengs[[clu]], baseWeak[[clu]], RateStrengs[[clu]], RateWeak[[clu]], style[[clu]], damagetype[[clu]]))
+)
+
+#transforming to kable
+clusterSummaryKable <- lapply(clusterScore$cluster,
+                              function(clu)  knitr::kable(clusterSummaryDf[[clu]], format = "html") %>%
+kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+)
+
+#eliminating col names
+clusterSummary <- lapply(clusterScore$cluster,
+                         function(clu) gsub("<thead>.*</thead>", "", clusterSummaryKable[[clu]]))
+```
+
+```{r echo= F}
+#geting clusters champions images
+cluChamps <- lapply(clusterScore$cluster,
+                    function(clu) paste0('![](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/',baseStats$Champion[lolDice$clusters == clu], '.png "',baseStats$Champion[lolDice$clusters == clu],'"){ width=50 }', collapse = ""))
+```
+
+### 3.3.1. Cluster 1 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[1]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[1]]
+```
+</div>
+</div>
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[1]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[1]]
+```
+</div>
+</div>
+
+#### 3.3.1.1 Cluster 1 Analysis.
+
+Cluster 1 has the close similarity to the Slayers class with a high amount of damage and mobility, but also it shows a similarity with the Fighter subclass Divers.
+
+The problem is that there is a grey area between the Divers, that trade defense for some mobility (from the subclass description: *"... are the more mobile portion of the Fighter class... Divers are not as durable as the tanks or juggernauts of the world..."*) and the Slayers subclass Skirmishers, that trade damage and mobility for some defense (from the subclass description: *"... Because Skirmishers lack high-end burst damage or reliable ways of closing in on high-priority targets, they are instead armed with situationally powerful defensive tools to survive..."*). So, Divers and Skirmishers end up being almost the same.
+
+Divers (at least from the approximation of our study) have more similarity with Slayers that with Fighters, making a considerable amount champions of that subclass being classified in our cluster 1, and also moving the cluster average toughness to an area that does not make it a weakness for this cluster, and creating a dissimilarity with class Slayer, which have as a proposed characteristic a low toughness of its members. 
+
+So we end with a considerable number of champions that on average have high damage and mobility but also a decent amount of toughness and level 18 base armor, leaving them with no clear weakness.
+
+
+### 3.3.2. Cluster 2 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[2]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[2]]
+```
+</div>
+</div>
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[2]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[2]]
+```
+</div>
+</div>
+
+#### 3.3.2.1 Cluster 2 Analysis.
+
+Cluster 2 has the close similarity to the Mage class. The class description tells us that the champions in this class have high damage, and from the subclasses descriptions we know that they also excel at controlling their opponents. These characteristics are present in the averages of cluster 2.
+
+Also, we can see that the Cluster 2 summary tell us that the champions in it, on average have low resistances, mobility, and toughness. Although the description of the Mage class does not mention these weaknesses, these are well known by the game players.
+
+### 3.3.3. Cluster 3 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[3]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[3]]
+```
+</div>
+</div>
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[3]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[3]]
+```
+</div>
+</div>
+
+#### 3.3.3.1 Cluster 3 Analysis.
+
+Cluster 3 is practically identical to the characteristic of the Tank class. With high resistances, toughness, and control, and low damage champions in cluster 3 totally validate the existence of the tank class.
+
+If you are familiar with the game, you should be asking why is ![Evelynn](http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Evelynn.png "Evelynn"){ width=25 } in this cluster? We also think she should not be there, but the thing is that her scores for toughness and base level 18 resistances are too high to be classified in the Cluster 1 (where we thought she would be classified), but not so low to be discarded as part of Cluster 3.
+
+### 3.3.4. Cluster 4 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[4]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[4]]
+```
+</div>
+</div>
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[4]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[4]]
+```
+</div>
+</div>
+
+#### 3.3.4.1 Cluster 4 Analysis.
+
+Cluster 4 has all the elements present in the Marksmen class description, high damage, and range, and low toughness and resistances, this makes this cluster a clear representation of the class.
+
+At first glance, the low average base lv18 Attack Damage seems like a contradiction to the Marksmen class characteristics, but as their description says *"... they... are extremely reliant on powerful item purchases to become true damage threats..."*, so this characteristic is fulfilled by a low base level 18 Attack Damage.
+
+### 3.3.5. Cluster 5 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[5]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[5]]
+```
+</div>
+</div>
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[5]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[5]]
+```
+</div>
+</div>
+
+#### 3.3.5.1 Cluster 5 Analysis.
+
+Cluster 5 has the closest similarity to the Controllers class with a high amount of control and utility, and low resistance, damage, and health.
+
+Although they have on average, a high base armor at level 18 we do not consider that this affects in a high degree they overall toughness. So this cluster can validate the existence of the controller class.
+
+### 3.3.6. Cluster 6 Summary.
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Cluster´s Champions**</center>
+```{r results="asis", echo= F}
+cat(cluChamps[[6]])
+```
+</div>
+<div class = "col-md-6">
+<center>**Strengths, Weaknesses, Style and Damage Type**</center>
+```{r results="asis", echo= F}
+clusterSummary[[6]]
+```
+</div>
+</div>
+
+<div class = "row">
+<div class = "col-md-6">
+<center>**Level 18 Base Stats Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarStats[[6]]
+```
+</div>
+<div class = "col-md-6">
+<center>**Ratings Averages**</center>
+```{r warning = FALSE, out.width = '100%', fig.height = 3, echo= F}
+polarRatings[[6]]
+```
+</div>
+</div>
+
+#### 3.3.6.1 Cluster 6 Analysis.
+
+Cluster 6 has the closest similarity to the fighter class with decent damage, high resistances, and toughness. However, as we saw in the cluster 1 analysis, the fighter subclass Divers has more things in common with that other cluster.
+
+As for the other fighter subclass Juggernaut, it seems more similar to Cluster 6, though its description tells us that Juggernauts *"... have a tough time closing in on targets due to their low range and extremely limited mobility..."*, but we see that the champions on Cluster 6 have on average a good base level 18 Move Speed, so not all the  Juggernauts suffer of "extremely limited mobility". Also, the cluster 6 champions have on average a high amount of Control which makes them have more strengths than weaknesses.
+
+### 3.3.7. Cluster 7 Summary.
+
+<center>**Cluster´s Champions**</center>
+<center>[<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Jhin.png" width="50">](http://leagueoflegends.wikia.com/wiki/Jhin "Jhin") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Kaisa.png" width="50">](http://leagueoflegends.wikia.com/wiki/Kaisa "Kaisa") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Kayle.png" width="50">](http://leagueoflegends.wikia.com/wiki/Kayle "Kayle") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Nidalee.png" width="50">](http://leagueoflegends.wikia.com/wiki/Nidalee "Nidalee")  [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Orianna.png" width="50">](http://leagueoflegends.wikia.com/wiki/Orianna "Orianna") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Teemo.png" width="50">](http://leagueoflegends.wikia.com/wiki/Teemo "Teemo") [<img src="http://ddragon.leagueoflegends.com/cdn/8.17.1/img/champion/Thresh.png" width="50">](http://leagueoflegends.wikia.com/wiki/Thresh "Thresh")</center>
+
+<br><br>
+Since Cluster 7 represented the "Unique Style" Champions, we will not make  a summary of them as a group.
+
+You can click on the image of each of the champions in this cluster to go to their respective LoL Wikia page to see their base stats and game client ratings.
+
+#### 3.3.7.1 Cluster 7 Analysis.
+
+As we see, on the t-SNE representation, Cluster 7 is the one with the most disperses champions, also on the Silhouette score table, we saw that almost all the champions in this cluster have negative scores. This suggests that these champions do not have strong points in common between them.
+
+That's why we compare Cluster 7 to the Unique Style class proposed by Riot to group those champions that don't fit well in the default classes, but that also are not similar with each other int their playstyle.
+
+People familiarized with the game will know that Kayle, Nidalee, and Teemo are somehow unique champions that are difficult to compare to others (in fact they are classified by Riot in the Unique Playstyles class). Jhin and Kaisa despite being close to the Marksmen class have a playstyle that differs from the standard of that class. Orianna and Thresh have similarities with the Controller and Mage classes, but with an attack speed and health at level 18 high enough to not be classified in neither of those classes. 
+
+We know that this is likely to only exists because we conducted the study with a fixed number of seven clusters, however; we consider that the similarities with the Unique Style class are strong enough to maintain this cluster as part of the study.
+
+# 4. Results.
+
+The objective of this study was to validate the existence of the League of Legends Champion classes as they were proposed in two blogs by Riot in 2016 and 2017, using unsupervised machine learning techniques. These are our results.
+
+We could validate the existence of the classes ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/2/28/Mage_icon.png){ width=25 } Mage, ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/5/5a/Tank_icon.png){ width=25 } Tank, ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/5/58/Controller_icon.png){ width=25 } Controller, and ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/7/7f/Marksman_icon.png){ width=25 } Marksmen since we find four clusters that share the characteristics described by Riot for those classes.
+
+As well, we could validate the existence of ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/6/67/Specialist_icon.png){ width=25 } Unique Style champions, that don't fit well in any cluster and don't have strong similarities between them.
+
+We could not validate the existence of the ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/8/8f/Fighter_icon.png){ width=25 } Fighter class as it was described in blogs, instead we find a group of champions with common characteristics, that in a way resembles the Juggernaut subclass, but with high amounts of Control and  that despite of  having a low mobility rating, have in average a decent amount of base move speed, contrary to the *"extremely limited mobility"* described for this subclass in the blogs.
+
+We neither could validate the existence of the ![](https://vignette.wikia.nocookie.net/leagueoflegends/images/2/28/Slayer_icon.png){ width=25 } Slayers class, as it was proposed by Riot, instead we find a considerable number of champions that shares, in average, high amounts of damage and mobility (as the proposed Slayers class) but without the disadvantage of a low toughness or base resistances (which are, on average, of a medium level).
+
+This last two result worries us since we find that approximately 36.17% of the current champions have on average more strengths than weaknesses, which can affect significantly the balance of the game.
+
+Finally, we want to remind that this study, due to the limitation of not having a reliable NPL analysis, did not consider the champions abilities, so please take with caution our results. We hope that in future studies, the abilities and many other variables could be added to the cluster analysis to get better results.
+
+# 5. Final Notes.
+
+- This was a preliminary study and I know it can be improved, for suggestions and corrections, you can contact me at [normalitychop@gmail.com](mailto:normalitychop@gmail.com).
+
+- This document was made using [<img src="https://www.r-project.org/Rlogo.png" width="75">](https://www.r-project.org/ "R"), [<img src="https://www.rstudio.com/wp-content/uploads/2016/09/RStudio-Logo-Blue-Gray-125.png" width="150">](https://www.rstudio.com/ "RStudio"), [<img src="https://www.rstudio.com/wp-content/uploads/2017/05/rmarkdown.png" width="75">](https://rmarkdown.rstudio.com/ "Rmarkdown"), [<img src="https://www.rstudio.com/wp-content/uploads/2014/04/knitr.png" width="75">](https://yihui.name/knitr/ "Knitr"), [<img src="https://plot.ly/static/img/logos/plotly-logomark.svg" width="150">](https://plot.ly/d3-js-for-r-and-shiny-charts/ "Plotly")and [<img src="http://pyviz.org/tutorial/assets/bokeh.png" width="75">](http://hafen.github.io/rbokeh/ "rbokeh").
+
+- The repository of this study could be found at [github.com/CaVe80/LoL_Clusters](https://github.com/CaVe80/LoL_Clusters)
+
+- Thank you for taking the time to read this document.
