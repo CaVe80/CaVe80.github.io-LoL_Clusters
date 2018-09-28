@@ -5,7 +5,9 @@ Hello, this repository contains the necessary documents to create the "Unsupervi
 
 |     DOCUMENT    	|                                DESCRIPTION                                	|
 |-----------------	|---------------------------------------------------------------------------	|
-| index.Rmd       	| R markdown document to create the study and web page                       	|
-| index.html      	| html page created with LoL Clusters.Rmd                                   	|
-| favicon.ico     	| Favicon to add to the webpage                                              	|
+| study.Rmd       	| R markdown document to create the study and study webpage                  	|
+| study.html      	| html page created with study.Rmd                                          	|
+| index.Rmd       	| R markdown document to create the abstract dashboard                       	|
+| index.html       	| html dashboard page created with index.Rmd                                	|
+| favicon.ico     	| Favicon to add to the study webpage and dash board                         	|
 | favicon.txt     	| code to add the favicon to LoL Clusters.Rmd                               	|
